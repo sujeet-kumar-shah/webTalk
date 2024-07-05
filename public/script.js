@@ -1,52 +1,127 @@
-const socket = io('/') // Create our socket
-const videoGrid = document.getElementById('video-grid') // Find the Video-Grid element
+const socket = io("/");
+const videoGrid = document.getElementById("video-grid");
+const myVideo = document.createElement("video");
+myVideo.muted = true;
 
-const myPeer = new Peer() // Creating a peer element which represents the current user
-const myVideo = document.createElement('video') // Create a new video tag to show our video
-myVideo.muted = true // Mute ourselves on our end so there is no feedback loop
+const peer = new Peer(undefined, {
+    path: "/peerjs",
+    host: "/",
+    port: "443",
+});
 
-// Access the user's video and audio
-navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
-}).then(stream => {
-    addVideoStream(myVideo, stream) // Display our video to ourselves
+let myVideoStream;
+navigator.mediaDevices
+    .getUserMedia({
+        video: true,
+        audio: true,
+    })
+    .then((stream) => {
+        myVideoStream = stream;
+        addVideoStream(myVideo, stream);
 
-    myPeer.on('call', call => { // When we join someone's room we will receive a call from them
-        call.answer(stream) // Stream them our video/audio
-        const video = document.createElement('video') // Create a video tag for them
-        call.on('stream', userVideoStream => { // When we recieve their stream
-            addVideoStream(video, userVideoStream) // Display their video to ourselves
+        peer.on("call", (call) => {
+            call.answer(stream);
+            const video = document.createElement("video");
+            call.on("stream", (userVideoStream) => {
+                addVideoStream(video, userVideoStream);
+            });
+        });
+
+        socket.on("user-connected", (userId) => {
+            connectToNewUser(userId, stream);
+        });
+    });
+
+socket.on("user-disconnected", (userId) => {
+    if (peers[userId]) peers[userId].close();
+});
+
+peer.on("open", (id) => {
+    socket.emit("join-room", ROOM_ID, id);
+});
+
+const connectToNewUser = (userId, stream) => {
+    const call = peer.call(userId, stream);
+    const video = document.createElement("video");
+    call.on("stream", (userVideoStream) => {
+        addVideoStream(video, userVideoStream);
+    });
+    call.on("close", () => {
+        video.remove();
+    });
+
+    peers[userId] = call;
+};
+
+const addVideoStream = (video, stream) => {
+    video.srcObject = stream;
+    video.addEventListener("loadedmetadata", () => {
+        video.play();
+    });
+    videoGrid.append(video);
+};
+
+// Controls
+const muteButton = document.getElementById("muteButton");
+const cameraButton = document.getElementById("cameraButton");
+const shareScreenButton = document.getElementById("shareScreenButton");
+const copyLinkButton = document.getElementById("copyLinkButton");
+
+muteButton.addEventListener("click", () => {
+    const enabled = myVideoStream.getAudioTracks()[0].enabled;
+    if (enabled) {
+        myVideoStream.getAudioTracks()[0].enabled = false;
+        muteButton.innerText = "Unmute";
+    } else {
+        myVideoStream.getAudioTracks()[0].enabled = true;
+        muteButton.innerText = "Mute";
+    }
+});
+
+cameraButton.addEventListener("click", () => {
+    const enabled = myVideoStream.getVideoTracks()[0].enabled;
+    if (enabled) {
+        myVideoStream.getVideoTracks()[0].enabled = false;
+        cameraButton.innerText = "Camera On";
+    } else {
+        myVideoStream.getVideoTracks()[0].enabled = true;
+        cameraButton.innerText = "Camera Off";
+    }
+});
+
+shareScreenButton.addEventListener("click", async () => {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+    });
+    const screenTrack = screenStream.getVideoTracks()[0];
+    myVideoStream.getVideoTracks()[0].stop();
+    myVideoStream.removeTrack(myVideoStream.getVideoTracks()[0]);
+    myVideoStream.addTrack(screenTrack);
+    screenTrack.onended = () => {
+        myVideoStream.removeTrack(screenTrack);
+        navigator.mediaDevices
+            .getUserMedia({
+                video: true,
+            })
+            .then((newStream) => {
+                const newTrack = newStream.getVideoTracks()[0];
+                myVideoStream.addTrack(newTrack);
+                myVideoStream.getVideoTracks()[0].enabled = true;
+                cameraButton.innerText = "Camera Off";
+            });
+    };
+});
+
+copyLinkButton.addEventListener("click", () => {
+    const roomUrl = window.location.href;
+    navigator.clipboard
+        .writeText(roomUrl)
+        .then(() => {
+            alert("Room URL copied to clipboard");
         })
-    })
+        .catch((err) => {
+            console.error("Failed to copy: ", err);
+        });
+});
 
-    socket.on('user-connected', userId => { // If a new user connect
-        connectToNewUser(userId, stream) 
-    })
-})
-
-myPeer.on('open', id => { // When we first open the app, have us join a room
-    socket.emit('join-room', ROOM_ID, id)
-})
-
-function connectToNewUser(userId, stream) { // This runs when someone joins our room
-    const call = myPeer.call(userId, stream) // Call the user who just joined
-    // Add their video
-    const video = document.createElement('video') 
-    call.on('stream', userVideoStream => {
-        addVideoStream(video, userVideoStream)
-    })
-    // If they leave, remove their video
-    call.on('close', () => {
-        video.remove()
-    })
-}
-
-
-function addVideoStream(video, stream) {
-    video.srcObject = stream 
-    video.addEventListener('loadedmetadata', () => { // Play the video as it loads
-        video.play()
-    })
-    videoGrid.append(video) // Append video element to videoGrid
-}
+const peers = {};

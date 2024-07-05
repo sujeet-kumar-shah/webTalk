@@ -1,38 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-   <head><title>Webchat</title></head>
+   <head>
+      <title>Webchat</title>
+      <style>
+         body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+         }
+
+         #error-container {
+            color: red;
+            text-align: center;
+            margin-top: 10px;
+         }
+
+         #name,
+         #message {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+         }
+
+         #name {
+            margin-top: 20px;
+         }
+
+         button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+         }
+
+         button:hover {
+            background-color: #0056b3;
+         }
+
+         #message-container {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            border-top: 1px solid #ccc;
+            background-color: white;
+         }
+
+         #message-container div {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background-color: #e1ffc7;
+            max-width: 80%;
+         }
+
+         #message-container div b {
+            color: #007bff;
+         }
+
+         .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+            background-color: white;
+         }
+
+         .chat-input input {
+            flex: 1;
+            margin-right: 10px;
+         }
+      </style>
+   </head>
    <script src="/socket.io/socket.io.js"></script>
    <script>
       var socket = io();
-      function setUsername(){
-         socket.emit('setUsername', document.getElementById('name').value);
-      };
+      function setUsername() {
+         socket.emit("setUsername", document.getElementById("name").value);
+      }
       var user;
-      socket.on('userExists', function(data){
-         document.getElementById('error-container').innerHTML = data;
+      socket.on("userExists", function (data) {
+         document.getElementById("error-container").innerHTML = data;
       });
-      socket.on('userSet', function(data){
+      socket.on("userSet", function (data) {
          user = data.username;
-         document.body.innerHTML = '<input type="text" id="message">\
-         <button type="button" name="button" onclick="sendMessage()">Send</button>\
-         <div id="message-container"></div>';
+         document.body.innerHTML =
+            '<div id="message-container"></div>\
+            <div class="chat-input">\
+               <input type="text" id="message" placeholder="Type your message here...">\
+               <button type="button" onclick="sendMessage()">Send</button>\
+            </div>';
       });
-      function sendMessage(){
-         var msg = document.getElementById('message').value;
-         if(msg){
-            socket.emit('msg', {message: msg, user: user});
+      function sendMessage() {
+         var msg = document.getElementById("message").value;
+         if (msg) {
+            socket.emit("msg", { message: msg, user: user });
          }
       }
-      socket.on('newmsg', function(data){
-         if(user){
-            document.getElementById('message-container').innerHTML +='<div><b>' + data.user + '</b>: ' + data.message + '</div>'
-            document.getElementById('message').value ="";
+      socket.on("newmsg", function (data) {
+         if (user) {
+            document.getElementById("message-container").innerHTML +=
+               "<div><b>" + data.user + "</b>: " + data.message + "</div>";
+            document.getElementById("message").value = "";
+            var messageContainer = document.getElementById("message-container");
+            messageContainer.scrollTop = messageContainer.scrollHeight;
          }
-      })
+      });
    </script>
    <body>
       <div id="error-container"></div>
-      <input id="name" type="text" name="name" value="" placeholder="Enter your name!">
-      <button type="button" name="button" onclick="setUsername()">Let me chat!</button>
-      </body>
-   </html>
+      <input
+         id="name"
+         type="text"
+         name="name"
+         value=""
+         placeholder="Enter your name!"
+      />
+      <button type="button" onclick="setUsername()">Let me chat!</button>
+   </body>
+</html>
